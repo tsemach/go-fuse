@@ -207,10 +207,47 @@ func (n *fuseFSNode) Read(ctx context.Context, req *fuse.ReadRequest, resp *fuse
 	if req.Offset >= int64(len(n.Data)) {
 			return nil
 	}
-	data := n.Data[req.Offset:]
-	if len(data) > req.Size {
-			data = data[:req.Size]
+	// data := n.Data[req.Offset:]
+	dirname, errno := getHomeDir()
+	if errno != 0 {
+		return errno
 	}
+
+	filesize, err := getFileSize(dirname+"/"+n.Name)
+	if err != nil {
+		fmt.Println("[Read] unable to get size of file:", dirname+"/"+n.Name, "err:", err)
+		return nil
+	}
+
+	file, err := os.Open(dirname+"/"+n.Name)
+	if err != nil {
+		fmt.Println("[Read] error opening file:", dirname+"/"+n.Name, "err:", err)
+		return nil
+	}
+	defer file.Close()
+
+	_, err = file.Seek(req.Offset, 0)
+	if err != nil {
+		fmt.Println("[Read] error seeking to offset:", err)
+		return nil
+	}
+
+	data := make([]byte, filesize)
+	nbytes, err := file.Read(data)
+	if err != nil {
+		fmt.Println("Error reading file:", err)
+		return syscall.EBADR
+	}
+
+	if (int64(nbytes) < filesize) {
+		fmt.Println("[Read] not enough bytes read, nbytes:", nbytes, "req.Size:", req.Size)
+		return syscall.EBADR
+	}
+
+	if len(data) > req.Size {
+		data = data[:req.Size]
+	}
+
 	resp.Data = data
 	return nil
 }
@@ -221,9 +258,34 @@ func (n *fuseFSNode) Write(ctx context.Context, req *fuse.WriteRequest, res *fus
 	}
 
 	// TODO: Get request GID+UID and file UID+GID and check if user or group is allowed to write to the file. If not return EPERM
+	dirname, errno := getHomeDir()
+	if errno != 0 {
+		return errno
+	}
 
+	os.WriteFile(dirname+"/"+n.Name, req.Data, n.Mode)
 	n.Data = req.Data
 	res.Size = len(req.Data)
 
 	return nil
+}
+
+func getHomeDir() (string, syscall.Errno) {
+	dirname, err := os.UserHomeDir()
+	if err != nil {
+		return "", syscall.EBADR
+	}
+
+	return dirname + "/tmp/fusefs", syscall.F_OK
+}
+
+func getFileSize(filepath string) (int64, error) {
+	fileInfo, err := os.Stat(filepath)
+
+	if err != nil {
+		fmt.Println("Error:", err)
+		return -1, err
+	}
+
+	return fileInfo.Size(), nil
 }
