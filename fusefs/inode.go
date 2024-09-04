@@ -2,6 +2,7 @@ package fusefs
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"syscall"
@@ -64,6 +65,73 @@ func (n fuseFSNode) Attr(ctx context.Context, attr *fuse.Attr) error {
 	return nil
 }
 
+func (n *fuseFSNode) Create(ctx context.Context, req *fuse.CreateRequest, res *fuse.CreateResponse) (fs.Node, fs.Handle, error) {
+	if !n.Mode.IsDir() {
+		return nil, nil, syscall.ENOTDIR
+	}
+	newNode := &fuseFSNode{
+		FS:    n.FS,
+		Name:  req.Name,
+		Inode: n.FS.GenerateInode(n.Inode, req.Name),
+		Mode:  req.Mode,
+	}
+	n.Nodes = append(n.Nodes, newNode)
+	return newNode, newNode, nil
+}
+
+// fs.NodeStringLookuper
+func (n fuseFSNode) Lookup(ctx context.Context, name string) (fs.Node, error) {
+	for _, n := range n.Nodes {
+		if n.Name == name {
+			return n, nil
+		}
+		// else if n.Mode.IsDir() {
+		// 	// TODO: Check if this is needed
+		// 	if lookupNode, err := n.Lookup(ctx, name); err == nil {
+		// 		return lookupNode, nil
+		// 	}
+		// }
+	}
+
+	dirname, errno := getHomeDir()
+	if errno != 0 {
+		return nil, syscall.ENOENT
+	}
+
+	if !isExists(dirname+"/"+name) {
+		return nil, syscall.ENOENT	
+	}
+	
+	fileInfo, err := os.Stat(dirname+"/"+name)
+	if err != nil {
+		fmt.Println(err)
+		return nil, syscall.ENOENT
+	}
+
+	var req = fuse.CreateRequest{
+		Header: fuse.Header{},
+		Name:   name,
+		Flags:  0,
+		Mode:   fileInfo.Mode(),
+		Umask:  0,
+	}
+	var res = fuse.CreateResponse{}
+
+	newNode, _, err := n.Create(
+		ctx,
+		&req,
+		&res,
+	)
+
+	if (err != nil) {
+		fmt.Println(err)
+		return nil, syscall.ENOENT
+	}
+
+	return newNode, nil
+	// return nil, syscall.ENOENT
+}
+
 func (n *fuseFSNode) Setattr(ctx context.Context, req *fuse.SetattrRequest, resp *fuse.SetattrResponse) error {
 	// NOTE: res.Atrr is filled by Attr method
  
@@ -105,21 +173,6 @@ func (n *fuseFSNode) Remove(ctx context.Context, req *fuse.RemoveRequest) error 
 	return syscall.ENOENT
 }
 
-// fs.NodeStringLookuper
-func (n fuseFSNode) Lookup(ctx context.Context, name string) (fs.Node, error) {
-	for _, n := range n.Nodes {
-		if n.Name == name {
-			return n, nil
-		} else if n.Mode.IsDir() {
-			// TODO: Check if this is needed
-			if lookupNode, err := n.Lookup(ctx, name); err == nil {
-				return lookupNode, nil
-			}
-		}
-	}
-	return nil, syscall.ENOENT
-}
-
 // fs.NodeMkdirer
 func (n *fuseFSNode) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fs.Node, error) {
 	if !n.Mode.IsDir() {
@@ -133,33 +186,6 @@ func (n *fuseFSNode) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fs.Node
 	}
 	n.Nodes = append(n.Nodes, newNode)
 	return newNode, nil
-}
-
-// fs.NodeCreater
-/*
-Unused fields
-	type CreateRequest struct {
-		Flags  OpenFlags
-		Umask os.FileMode
-	}
-
-	type CreateResponse struct {
-		LookupResponse
-		OpenResponse
-	}
-*/
-func (n *fuseFSNode) Create(ctx context.Context, req *fuse.CreateRequest, res *fuse.CreateResponse) (fs.Node, fs.Handle, error) {
-	if !n.Mode.IsDir() {
-		return nil, nil, syscall.ENOTDIR
-	}
-	newNode := &fuseFSNode{
-		FS:    n.FS,
-		Name:  req.Name,
-		Inode: n.FS.GenerateInode(n.Inode, req.Name),
-		Mode:  req.Mode,
-	}
-	n.Nodes = append(n.Nodes, newNode)
-	return newNode, newNode, nil
 }
 
 // fs.NodeGetxattrer
@@ -288,4 +314,15 @@ func getFileSize(filepath string) (int64, error) {
 	}
 
 	return fileInfo.Size(), nil
+}
+
+func isExists(name string) bool {
+	_, err := os.Stat(name)
+	if err == nil {
+			return true
+	}
+	if errors.Is(err, os.ErrNotExist) {
+			return false
+	}
+	return false
 }
