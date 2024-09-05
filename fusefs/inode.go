@@ -48,6 +48,7 @@ func NewFuseFSNode() FuseFSNode {
 type fuseFSNode struct {
 	FS     FuseFS
 	Name   string
+	Path 	 string	
 	Inode  uint64
 	Mode   os.FileMode
 	Nodes  []*fuseFSNode
@@ -120,46 +121,53 @@ func (n fuseFSNode) Lookup(ctx context.Context, name string) (fs.Node, error) {
 	return nil, syscall.ENOENT
 }
 
-// fs.NodeMkdirer
-func (n *fuseFSNode) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fs.Node, error) {
-	if !n.Mode.IsDir() {
-		return nil, syscall.ENOTDIR
-	}
-	newNode := &fuseFSNode{
-		FS:    n.FS,
-		Name:  req.Name,
-		Inode: n.FS.GenerateInode(n.Inode, req.Name),
-		Mode:  req.Mode,
-	}
-	n.Nodes = append(n.Nodes, newNode)
-	return newNode, nil
-}
-
-// fs.NodeCreater
-/*
-Unused fields
-	type CreateRequest struct {
-		Flags  OpenFlags
-		Umask os.FileMode
-	}
-
-	type CreateResponse struct {
-		LookupResponse
-		OpenResponse
-	}
-*/
 func (n *fuseFSNode) Create(ctx context.Context, req *fuse.CreateRequest, res *fuse.CreateResponse) (fs.Node, fs.Handle, error) {
 	if !n.Mode.IsDir() {
 		return nil, nil, syscall.ENOTDIR
 	}
+
+	// var path string
+	
+	// if n.Path != "" {
+	// 	path = n.Path+"/"+req.Name
+	// } else {
+	// 	path = req.Name
+	// }
+
 	newNode := &fuseFSNode{
 		FS:    n.FS,
 		Name:  req.Name,
+		Path:  n.Path,
 		Inode: n.FS.GenerateInode(n.Inode, req.Name),
 		Mode:  req.Mode,
 	}
 	n.Nodes = append(n.Nodes, newNode)
 	return newNode, newNode, nil
+}
+
+// fs.NodeMkdirer
+func (n *fuseFSNode) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fs.Node, error) {
+	if !n.Mode.IsDir() {
+		return nil, syscall.ENOTDIR
+	}
+
+	var path string
+
+	if n.Path != "" {
+		path = n.Path+"/"+req.Name
+	} else {
+		path = req.Name
+	}
+
+	newNode := &fuseFSNode{
+		FS:    n.FS,
+		Name:  req.Name,
+		Path:  path,
+		Inode: n.FS.GenerateInode(n.Inode, req.Name),
+		Mode:  req.Mode,
+	}
+	n.Nodes = append(n.Nodes, newNode)
+	return newNode, nil
 }
 
 // fs.NodeGetxattrer
@@ -207,42 +215,43 @@ func (n *fuseFSNode) Read(ctx context.Context, req *fuse.ReadRequest, resp *fuse
 	if req.Offset >= int64(len(n.Data)) {
 			return nil
 	}
-	// data := n.Data[req.Offset:]
-	dirname, errno := getHomeDir()
-	if errno != 0 {
-		return errno
-	}
 
-	filesize, err := getFileSize(dirname+"/"+n.Name)
-	if err != nil {
-		fmt.Println("[Read] unable to get size of file:", dirname+"/"+n.Name, "err:", err)
-		return nil
-	}
+	data := n.Data[req.Offset:]
+	// dirname, errno := getHomeDir()
+	// if errno != 0 {
+	// 	return errno
+	// }
 
-	file, err := os.Open(dirname+"/"+n.Name)
-	if err != nil {
-		fmt.Println("[Read] error opening file:", dirname+"/"+n.Name, "err:", err)
-		return nil
-	}
-	defer file.Close()
+	// filesize, err := getFileSize(dirname+"/"+n.Name)
+	// if err != nil {
+	// 	fmt.Println("[Read] unable to get size of file:", dirname+"/"+n.Name, "err:", err)
+	// 	return nil
+	// }
 
-	_, err = file.Seek(req.Offset, 0)
-	if err != nil {
-		fmt.Println("[Read] error seeking to offset:", err)
-		return nil
-	}
+	// file, err := os.Open(dirname+"/"+n.Name)
+	// if err != nil {
+	// 	fmt.Println("[Read] error opening file:", dirname+"/"+n.Name, "err:", err)
+	// 	return nil
+	// }
+	// defer file.Close()
 
-	data := make([]byte, filesize)
-	nbytes, err := file.Read(data)
-	if err != nil {
-		fmt.Println("Error reading file:", err)
-		return syscall.EBADR
-	}
+	// _, err = file.Seek(req.Offset, 0)
+	// if err != nil {
+	// 	fmt.Println("[Read] error seeking to offset:", err)
+	// 	return nil
+	// }
 
-	if (int64(nbytes) < filesize) {
-		fmt.Println("[Read] not enough bytes read, nbytes:", nbytes, "req.Size:", req.Size)
-		return syscall.EBADR
-	}
+	// data := make([]byte, filesize)
+	// nbytes, err := file.Read(data)
+	// if err != nil {
+	// 	fmt.Println("Error reading file:", err)
+	// 	return syscall.EBADR
+	// }
+
+	// if (int64(nbytes) < filesize) {
+	// 	fmt.Println("[Read] not enough bytes read, nbytes:", nbytes, "req.Size:", req.Size)
+	// 	return syscall.EBADR
+	// }
 
 	if len(data) > req.Size {
 		data = data[:req.Size]
@@ -258,16 +267,20 @@ func (n *fuseFSNode) Write(ctx context.Context, req *fuse.WriteRequest, res *fus
 	}
 
 	// TODO: Get request GID+UID and file UID+GID and check if user or group is allowed to write to the file. If not return EPERM
-	dirname, errno := getHomeDir()
-	if errno != 0 {
-		return errno
-	}
+	// dirname, errno := getHomeDir()
+	// if errno != 0 {
+	// 	return errno
+	// }
 
-	os.WriteFile(dirname+"/"+n.Name, req.Data, n.Mode)
+	// os.WriteFile(dirname+"/"+n.Name, req.Data, n.Mode)
 	n.Data = req.Data
 	res.Size = len(req.Data)
 
 	return nil
+}
+
+func (n *fuseFSNode) getNodeDir() string {
+	return n.FS.Mountpoint() + "/" + n.Path
 }
 
 func getHomeDir() (string, syscall.Errno) {
