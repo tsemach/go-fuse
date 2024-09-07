@@ -126,14 +126,6 @@ func (n *fuseFSNode) Create(ctx context.Context, req *fuse.CreateRequest, res *f
 		return nil, nil, syscall.ENOTDIR
 	}
 
-	// var path string
-	
-	// if n.Path != "" {
-	// 	path = n.Path+"/"+req.Name
-	// } else {
-	// 	path = req.Name
-	// }
-
 	newNode := &fuseFSNode{
 		FS:    n.FS,
 		Name:  req.Name,
@@ -166,6 +158,12 @@ func (n *fuseFSNode) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fs.Node
 		Inode: n.FS.GenerateInode(n.Inode, req.Name),
 		Mode:  req.Mode,
 	}
+
+	// err := os.MkdirAll(newNode.getFullPath(), 0755)
+	// if err != nil {
+	// 	fmt.Println(err)
+	// }
+
 	n.Nodes = append(n.Nodes, newNode)
 	return newNode, nil
 }
@@ -199,17 +197,6 @@ func (n *fuseFSNode) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 	}
 	return ents, nil
 }
-
-// fs.HandleWriter
-/*
-Unused fields
-	type WriteRequest struct {
-		Handle    HandleID
-		Offset    int64
-		Flags     WriteFlags
-		LockOwner LockOwner
-	}
-*/
 
 func (n *fuseFSNode) Read(ctx context.Context, req *fuse.ReadRequest, resp *fuse.ReadResponse) error {
 	if req.Offset >= int64(len(n.Data)) {

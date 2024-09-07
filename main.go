@@ -9,6 +9,8 @@ import (
 )
 
 func main() {
+	// fusefs.BuildNodesTree("/home/tsemach/tmp/fusefs")
+
 	path := "/tmp/fusefs"
 
 	fmt.Println("path:", path)
@@ -20,7 +22,12 @@ func main() {
 	}
 	log.Println("going to mount on:", path)
 
-	fs := fusefs.NewFuseFS(path)
+	fs, err := fusefs.NewFuseFS(path)
+	if err != nil {
+		log.Fatalf("failed to new filesystem: %s", err)
+		os.Exit(3)
+	}
+
 	if err = fs.Mount(); err != nil {
 		log.Fatalf("failed to mount: %s", err)
 	}
