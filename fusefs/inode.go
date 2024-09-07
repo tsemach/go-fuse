@@ -3,6 +3,7 @@ package fusefs
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"syscall"
 
@@ -203,42 +204,42 @@ func (n *fuseFSNode) Read(ctx context.Context, req *fuse.ReadRequest, resp *fuse
 			return nil
 	}
 
-	data := n.Data[req.Offset:]
+	// data := n.Data[req.Offset:]
 	// dirname, errno := getHomeDir()
 	// if errno != 0 {
 	// 	return errno
 	// }
+	filename := n.Path + "/" + n.Name
+	filesize, err := getFileSize(n.Path)
+	if err != nil {
+		log.Println("[Read] unable to get size of file:", filename, "err:", err)
+		return nil
+	}
 
-	// filesize, err := getFileSize(dirname+"/"+n.Name)
-	// if err != nil {
-	// 	fmt.Println("[Read] unable to get size of file:", dirname+"/"+n.Name, "err:", err)
-	// 	return nil
-	// }
+	file, err := os.Open(filename)
+	if err != nil {
+		log.Println("[Read] error opening file:", filename, "err:", err)
+		return nil
+	}
+	defer file.Close()
 
-	// file, err := os.Open(dirname+"/"+n.Name)
-	// if err != nil {
-	// 	fmt.Println("[Read] error opening file:", dirname+"/"+n.Name, "err:", err)
-	// 	return nil
-	// }
-	// defer file.Close()
+	_, err = file.Seek(req.Offset, 0)
+	if err != nil {
+		log.Println("[Read] error seeking to offset:", err)
+		return nil
+	}
 
-	// _, err = file.Seek(req.Offset, 0)
-	// if err != nil {
-	// 	fmt.Println("[Read] error seeking to offset:", err)
-	// 	return nil
-	// }
+	data := make([]byte, filesize)
+	nbytes, err := file.Read(data)
+	if err != nil {
+		log.Println("Error reading file:", err)
+		return syscall.EBADR
+	}
 
-	// data := make([]byte, filesize)
-	// nbytes, err := file.Read(data)
-	// if err != nil {
-	// 	fmt.Println("Error reading file:", err)
-	// 	return syscall.EBADR
-	// }
-
-	// if (int64(nbytes) < filesize) {
-	// 	fmt.Println("[Read] not enough bytes read, nbytes:", nbytes, "req.Size:", req.Size)
-	// 	return syscall.EBADR
-	// }
+	if (int64(nbytes) < filesize) {
+		log.Println("[Read] not enough bytes read, nbytes:", nbytes, "req.Size:", req.Size)
+		return syscall.EBADR
+	}
 
 	if len(data) > req.Size {
 		data = data[:req.Size]

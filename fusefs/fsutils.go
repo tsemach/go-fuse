@@ -7,8 +7,12 @@ import (
 
 /*
  * read the directory contents (non-recursive)
+ *
+ * rootDir 			- root dir of all the target file sysm
+ * path 				- a directory relative path the root dir of the directory beening read
+ * parentINode 	- INode of the directory beening scan (os.ReadDir)
  */
-func buildFSNodesTree(rootDir string, rfs *fuseFS, path string, parentInode uint64) ([]*fuseFSNode, error) {	
+func buildFSNodesTree(rootDir string, rfs *fuseFS, path string, parentInode uint64) ([]*fuseFSNode, error) {
 	entries, err := os.ReadDir(getPath(rootDir, path))
 	if err != nil {
 		log.Println(" [INFO] [buildFSNodesTree] error reading directory:", err)
@@ -24,7 +28,7 @@ func buildFSNodesTree(rootDir string, rfs *fuseFS, path string, parentInode uint
 			node := &fuseFSNode{
 				FS:    rfs.rootNode.FS,
 				Name:  entry.Name(),
-				Path:  path,
+				Path:  getPath(rootDir, getPath(path, entry.Name())),
 				Inode: rfs.GenerateInode(parentInode, entry.Name()),
 				Mode:  info.Mode(),
 			}
