@@ -49,11 +49,12 @@ func NewFuseFSNode() FuseFSNode {
 type fuseFSNode struct {
 	FS     FuseFS
 	Name   string
-	Path 	 string	
+	Path   string // TODO: Path should be on inode of directories only and adding Parent attribure with point to the parent inode.
 	Inode  uint64
 	Mode   os.FileMode
 	Nodes  []*fuseFSNode
 	Data   []byte
+	Size   uint64
 	Xattrs map[string]string
 }
 
@@ -61,14 +62,14 @@ type fuseFSNode struct {
 func (n fuseFSNode) Attr(ctx context.Context, attr *fuse.Attr) error {
 	attr.Inode = n.Inode
 	attr.Mode = n.Mode
-	attr.Size = uint64(len(n.Data))
-	
+	attr.Size = uint64(n.Size)
+
 	return nil
 }
 
 func (n *fuseFSNode) Setattr(ctx context.Context, req *fuse.SetattrRequest, resp *fuse.SetattrResponse) error {
 	// NOTE: res.Atrr is filled by Attr method
- 
+
 	if req.Mode&os.ModeIrregular != 0 {
 		fmt.Println("call to Setattr with mode irregular")
 		return nil
@@ -108,18 +109,29 @@ func (n *fuseFSNode) Remove(ctx context.Context, req *fuse.RemoveRequest) error 
 }
 
 // fs.NodeStringLookuper
-func (n fuseFSNode) Lookup(ctx context.Context, name string) (fs.Node, error) {
-	for _, n := range n.Nodes {
-		if n.Name == name {
-			return n, nil
-		} else if n.Mode.IsDir() {
-			// TODO: Check if this is needed
-			if lookupNode, err := n.Lookup(ctx, name); err == nil {
-				return lookupNode, nil
-			}
+func (n *fuseFSNode) Lookup(ctx context.Context, name string) (fs.Node, error) {
+	for _, node := range n.Nodes {
+		if node.Name == name {
+			return node, nil
 		}
 	}
-	return nil, syscall.ENOENT
+	fileInfo, err := os.Stat(n.Path+"/"+name)
+	if err != nil {
+		return nil, syscall.ENOENT
+	}
+
+	newNode := n.getNode(name, fileInfo.Mode())
+	// newNode := &fuseFSNode{
+	// 	FS:    n.FS,
+	// 	Name:  name,
+	// 	Path:  n.Path,
+	// 	Inode: n.FS.GenerateInode(n.Inode, name),
+	// 	Mode:  fileInfo.Mode(),
+	// }
+	newNode.Size = uint64(fileInfo.Size())
+
+	n.Nodes = append(n.Nodes, newNode)
+	return newNode, nil
 }
 
 func (n *fuseFSNode) Create(ctx context.Context, req *fuse.CreateRequest, res *fuse.CreateResponse) (fs.Node, fs.Handle, error) {
@@ -127,13 +139,15 @@ func (n *fuseFSNode) Create(ctx context.Context, req *fuse.CreateRequest, res *f
 		return nil, nil, syscall.ENOTDIR
 	}
 
-	newNode := &fuseFSNode{
-		FS:    n.FS,
-		Name:  req.Name,
-		Path:  n.Path,
-		Inode: n.FS.GenerateInode(n.Inode, req.Name),
-		Mode:  req.Mode,
-	}
+	newNode := n.getNode(req.Name, req.Mode)
+
+	// newNode := &fuseFSNode{
+	// 	FS:    n.FS,
+	// 	Name:  req.Name,
+	// 	Path:  n.Path,
+	// 	Inode: n.FS.GenerateInode(n.Inode, req.Name),
+	// 	Mode:  req.Mode,
+	// }
 	n.Nodes = append(n.Nodes, newNode)
 	return newNode, newNode, nil
 }
@@ -147,7 +161,7 @@ func (n *fuseFSNode) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fs.Node
 	var path string
 
 	if n.Path != "" {
-		path = n.Path+"/"+req.Name
+		path = n.Path + "/" + req.Name
 	} else {
 		path = req.Name
 	}
@@ -200,21 +214,7 @@ func (n *fuseFSNode) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 }
 
 func (n *fuseFSNode) Read(ctx context.Context, req *fuse.ReadRequest, resp *fuse.ReadResponse) error {
-	if req.Offset >= int64(len(n.Data)) {
-			return nil
-	}
-
-	// data := n.Data[req.Offset:]
-	// dirname, errno := getHomeDir()
-	// if errno != 0 {
-	// 	return errno
-	// }
 	filename := n.Path + "/" + n.Name
-	filesize, err := getFileSize(n.Path)
-	if err != nil {
-		log.Println("[Read] unable to get size of file:", filename, "err:", err)
-		return nil
-	}
 
 	file, err := os.Open(filename)
 	if err != nil {
@@ -229,23 +229,23 @@ func (n *fuseFSNode) Read(ctx context.Context, req *fuse.ReadRequest, resp *fuse
 		return nil
 	}
 
-	data := make([]byte, filesize)
-	nbytes, err := file.Read(data)
+	n.Data = make([]byte, n.Size)
+	nbytes, err := file.Read(n.Data)
 	if err != nil {
 		log.Println("Error reading file:", err)
 		return syscall.EBADR
 	}
 
-	if (int64(nbytes) < filesize) {
+	if int64(nbytes) < int64(n.Size) {
 		log.Println("[Read] not enough bytes read, nbytes:", nbytes, "req.Size:", req.Size)
 		return syscall.EBADR
 	}
 
-	if len(data) > req.Size {
-		data = data[:req.Size]
+	if len(n.Data) > req.Size {
+		n.Data = n.Data[:req.Size]
 	}
 
-	resp.Data = data
+	resp.Data = n.Data
 	return nil
 }
 
@@ -255,16 +255,23 @@ func (n *fuseFSNode) Write(ctx context.Context, req *fuse.WriteRequest, res *fus
 	}
 
 	// TODO: Get request GID+UID and file UID+GID and check if user or group is allowed to write to the file. If not return EPERM
-	// dirname, errno := getHomeDir()
-	// if errno != 0 {
-	// 	return errno
-	// }
 
-	// os.WriteFile(dirname+"/"+n.Name, req.Data, n.Mode)
+	os.WriteFile(n.Path+"/"+n.Name, req.Data, n.Mode)
 	n.Data = req.Data
+	n.Size = uint64(len(n.Data))
 	res.Size = len(req.Data)
 
 	return nil
+}
+
+func (n *fuseFSNode) getNode(name string, mode os.FileMode) *fuseFSNode {
+	return &fuseFSNode{
+		FS:    n.FS,
+		Name:  name,
+		Path:  n.Path,
+		Inode: n.FS.GenerateInode(n.Inode, name),
+		Mode:  mode,
+	}
 }
 
 func (n *fuseFSNode) getNodeDir() string {
