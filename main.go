@@ -2,43 +2,65 @@ package main
 
 import (
 	"fmt"
-	"log"
+	"net/http"
 	"os"
+	"sync"
+	"time"
 
-	"github.com/tsemach/go-fuse/fusefs"
+	"github.com/tsemach/go-fuse/server"
+	// "gitlab.mobileye.com/iot/iot-upload-go/config"
+	// cfg "gitlab.mobileye.com/iot/iot-upload-go/config"
 )
 
+var port = 8080
+
+// func main_init() {
+// 	var wg sync.WaitGroup
+
+// 	config.BuildConfig()
+// 	wg.Add(1)
+// 	go iotaws.AWS.Init(&wg)
+// 	wg.Add(1)
+// 	go ops.OS.Connect(&wg)
+// 	wg.Add(1)
+// 	go redis.Redis.Connect(&wg)
+// 	wg.Add(1)
+// 	go upload.Upload.Init(&wg)
+// 	wg.Wait()
+// }
+
+func createServer() *http.Server {
+	r := server.CreateGin()
+
+	return &http.Server{
+		Addr:    fmt.Sprintf(":%v", port),
+		Handler: r,
+
+		ReadTimeout:  60 * time.Second,
+		WriteTimeout: 60 * time.Second,
+	}
+}
+
 func main() {
-	// fusefs.BuildNodesTree("/home/tsemach/tmp/fusefs")
+	// main_init()
+	// config.BuildConfig()
 
-	path := "/tmp/fusefs"
-
-	fmt.Println("path:", path)
-
-	_, err := os.Stat(path)
-	if os.IsNotExist(err) {
-		log.Fatalf("failed to create %s: %v", path, err)
-		os.Exit(2)
-	}
-	log.Println("going to mount on:", path)
-
-	fs, err := fusefs.NewFuseFS(path)
+	mydir, err := os.Getwd()
 	if err != nil {
-		log.Fatalf("failed to new filesystem: %s", err)
-		os.Exit(3)
+		fmt.Println(err)
 	}
+	fmt.Println(mydir)
 
-	if err = fs.Mount(); err != nil {
-		log.Fatalf("failed to mount: %s", err)
-	}
+	wg := new(sync.WaitGroup)
+	wg.Add(1)
 
-	fmt.Printf("mount fs: %v\n", fs)
+	// goroutine to launch a server on port 8080
+	go func() {
+		server := createServer()
+		fmt.Println(server.ListenAndServe())
+		wg.Done()
+	}()
 
-	if err = fs.Serve(); err != nil {
-		log.Fatalf("failed to serve: %s", err)
-	}
-
-	// if err = fs.Unmount(); err != nil {
-	// 	log.Fatalf("failed to unmount: %s", err)
-	// }
+	// wait until WaitGroup is done
+	wg.Wait()
 }
