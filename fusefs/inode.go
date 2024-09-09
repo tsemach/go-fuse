@@ -74,8 +74,8 @@ func (n *fuseFSNode) Setattr(ctx context.Context, req *fuse.SetattrRequest, resp
 		fmt.Println("call to Setattr with mode irregular")
 		return nil
 	}
-
 	n.Mode = req.Mode
+
 	return nil
 }
 
@@ -115,6 +115,7 @@ func (n *fuseFSNode) Lookup(ctx context.Context, name string) (fs.Node, error) {
 			return node, nil
 		}
 	}
+
 	fileInfo, err := os.Stat(n.Path+"/"+name)
 	if err != nil {
 		return nil, syscall.ENOENT
@@ -129,8 +130,8 @@ func (n *fuseFSNode) Lookup(ctx context.Context, name string) (fs.Node, error) {
 	// 	Mode:  fileInfo.Mode(),
 	// }
 	newNode.Size = uint64(fileInfo.Size())
-
 	n.Nodes = append(n.Nodes, newNode)
+
 	return newNode, nil
 }
 
@@ -215,6 +216,11 @@ func (n *fuseFSNode) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 
 func (n *fuseFSNode) Read(ctx context.Context, req *fuse.ReadRequest, resp *fuse.ReadResponse) error {
 	filename := n.Path + "/" + n.Name
+
+	if uint64(len(n.Data)) >= n.Size {
+		resp.Data = n.Data
+		return nil
+	}
 
 	file, err := os.Open(filename)
 	if err != nil {
