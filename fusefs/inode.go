@@ -159,26 +159,30 @@ func (n *fuseFSNode) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fs.Node
 		return nil, syscall.ENOTDIR
 	}
 
-	var path string
+	// var path string
 
-	if n.Path != "" {
-		path = n.Path + "/" + req.Name
-	} else {
-		path = req.Name
-	}
-
-	newNode := &fuseFSNode{
-		FS:    n.FS,
-		Name:  req.Name,
-		Path:  path,
-		Inode: n.FS.GenerateInode(n.Inode, req.Name),
-		Mode:  req.Mode,
-	}
-
-	// err := os.MkdirAll(newNode.getFullPath(), 0755)
-	// if err != nil {
-	// 	fmt.Println(err)
+	// if n.Path != "" {
+	// 	path = n.Path + "/" + req.Name
+	// } else {
+	// 	path = req.Name
 	// }
+	// path := getPath(n.Path, req.Name)
+
+	newNode := n.getNode(req.Name, req.Mode)
+	newNode.Path = getPath(n.Path, req.Name)
+
+	// newNode := &fuseFSNode{
+	// 	FS:    n.FS,
+	// 	Name:  req.Name,
+	// 	Path:  path,
+	// 	Inode: n.FS.GenerateInode(n.Inode, req.Name),
+	// 	Mode:  req.Mode,
+	// }
+
+	err := os.Mkdir(newNode.Path, req.Mode)
+	if err != nil {
+		return nil, syscall.EINVAL
+	}
 
 	n.Nodes = append(n.Nodes, newNode)
 	return newNode, nil
@@ -262,7 +266,7 @@ func (n *fuseFSNode) Write(ctx context.Context, req *fuse.WriteRequest, res *fus
 
 	// TODO: Get request GID+UID and file UID+GID and check if user or group is allowed to write to the file. If not return EPERM
 
-	os.WriteFile(n.Path+"/"+n.Name, req.Data, n.Mode)
+	os.WriteFile(getPath(n.Path, n.Name), req.Data, n.Mode)
 	n.Data = req.Data
 	n.Size = uint64(len(n.Data))
 	res.Size = len(req.Data)
