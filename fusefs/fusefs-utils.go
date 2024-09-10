@@ -12,20 +12,20 @@ import (
  * path 				- a directory relative path the root dir of the directory beening read
  * parentINode 	- INode of the directory beening scan (os.ReadDir)
  */
-func buildFSNodesTree(rootDir string, rfs *fuseFS, path string, parentInode uint64) ([]*fuseFSNode, error) {
+func buildFSNodesTree(rootDir string, rfs *fuseFS, path string, parentInode uint64) ([]*FuseFSNode, error) {
 	entries, err := os.ReadDir(getPath(rootDir, path))
 	if err != nil {
 		log.Println(" [INFO] [buildFSNodesTree] error reading directory:", err)
 		return nil, err
 	}
 
-	var nodes = make([]*fuseFSNode, 0)
+	var nodes = make([]*FuseFSNode, 0)
 	for _, entry := range entries {
 		if entry.IsDir() {
 			log.Println("[INFO] [buildFSNodesTree]", entry.Name())
 
 			info, _ := entry.Info()
-			node := &fuseFSNode{
+			node := &FuseFSNode{
 				FS:    rfs.rootNode.FS,
 				Name:  entry.Name(),
 				Path:  getPath(rootDir, getPath(path, entry.Name())),
@@ -51,6 +51,16 @@ func getPath(path string, name string) string {
 		return name
 	}
 	return path + "/" + name
+}
+
+func isDirectoryExist(path string) bool {
+	info, err := os.Stat(path)
+
+	if os.IsNotExist(err) {
+		return false
+	}
+
+	return info.IsDir()
 }
 
 // func getDirectoriesCount(rootDir string /*, nodes *fuseFSNode*/) (int, error) {

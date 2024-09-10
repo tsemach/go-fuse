@@ -22,19 +22,20 @@ type FuseFS interface {
 type fuseFS struct {
 	mountpoint string
 	conn       *fuse.Conn
-	rootNode   *fuseFSNode // FuseFSNode
+	rootNode   *FuseFSNode // FuseFSNode
 	lastInode  uint64
 }
 
-func NewFuseFS(mountpoint string) (FuseFS, error) {
+func NewFuseFS(mountpoint string, targetpath string) (FuseFS, error) {
 	rfs := &fuseFS{mountpoint: mountpoint, lastInode: 1}
-	rfs.rootNode = &fuseFSNode{
+	rfs.rootNode = &FuseFSNode{
 		FS:    rfs,
 		Inode: 1,
 		Mode:  os.ModeDir | 0o555,
 	}
 
-	nodes, err := buildFSNodesTree("/home/tsemach/tmp/fusefs", rfs, "", rfs.rootNode.Inode)
+	// nodes, err := buildFSNodesTree("/home/tsemach/tmp/fusefs", rfs, "", rfs.rootNode.Inode)
+	nodes, err := buildFSNodesTree(targetpath, rfs, "", rfs.rootNode.Inode)
 	if err != nil {
 		log.Fatalln("error building fs nodes tree", err)
 

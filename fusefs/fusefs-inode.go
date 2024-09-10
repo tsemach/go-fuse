@@ -11,7 +11,7 @@ import (
 	"bazil.org/fuse/fs"
 )
 
-type FuseFSNode interface {
+type FuseFSNodeAPI interface {
 	fs.Node
 	// fs.NodeGetattrer
 	fs.NodeSetattrer
@@ -42,24 +42,24 @@ type FuseFSNode interface {
 	// fs.HandleReleaser <-
 }
 
-func NewFuseFSNode() FuseFSNode {
-	return &fuseFSNode{}
+func NewFuseFSNode() FuseFSNodeAPI {
+	return &FuseFSNode{}
 }
 
-type fuseFSNode struct {
+type FuseFSNode struct {
 	FS     FuseFS
 	Name   string
 	Path   string // TODO: Path should be on inode of directories only and adding Parent attribure with point to the parent inode.
 	Inode  uint64
 	Mode   os.FileMode
-	Nodes  []*fuseFSNode
+	Nodes  []*FuseFSNode
 	Data   []byte
 	Size   uint64
 	Xattrs map[string]string
 }
 
 // fs.Node */
-func (n fuseFSNode) Attr(ctx context.Context, attr *fuse.Attr) error {
+func (n FuseFSNode) Attr(ctx context.Context, attr *fuse.Attr) error {
 	attr.Inode = n.Inode
 	attr.Mode = n.Mode
 	attr.Size = uint64(n.Size)
@@ -67,7 +67,7 @@ func (n fuseFSNode) Attr(ctx context.Context, attr *fuse.Attr) error {
 	return nil
 }
 
-func (n *fuseFSNode) Setattr(ctx context.Context, req *fuse.SetattrRequest, resp *fuse.SetattrResponse) error {
+func (n *FuseFSNode) Setattr(ctx context.Context, req *fuse.SetattrRequest, resp *fuse.SetattrResponse) error {
 	// NOTE: res.Atrr is filled by Attr method
 
 	if req.Mode&os.ModeIrregular != 0 {
@@ -79,12 +79,12 @@ func (n *fuseFSNode) Setattr(ctx context.Context, req *fuse.SetattrRequest, resp
 	return nil
 }
 
-func (n *fuseFSNode) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.OpenResponse) (fs.Handle, error) {
+func (n *FuseFSNode) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.OpenResponse) (fs.Handle, error) {
 	return n, nil
 }
 
 // fs.NodeRemover
-func (n *fuseFSNode) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
+func (n *FuseFSNode) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
 	for i, node := range n.Nodes {
 		if node.Name == req.Name {
 			// TODO: Test if rmdir fills req.Dir
@@ -109,14 +109,14 @@ func (n *fuseFSNode) Remove(ctx context.Context, req *fuse.RemoveRequest) error 
 }
 
 // fs.NodeStringLookuper
-func (n *fuseFSNode) Lookup(ctx context.Context, name string) (fs.Node, error) {
+func (n *FuseFSNode) Lookup(ctx context.Context, name string) (fs.Node, error) {
 	for _, node := range n.Nodes {
 		if node.Name == name {
 			return node, nil
 		}
 	}
 
-	fileInfo, err := os.Stat(n.Path+"/"+name)
+	fileInfo, err := os.Stat(n.Path + "/" + name)
 	if err != nil {
 		return nil, syscall.ENOENT
 	}
@@ -135,7 +135,7 @@ func (n *fuseFSNode) Lookup(ctx context.Context, name string) (fs.Node, error) {
 	return newNode, nil
 }
 
-func (n *fuseFSNode) Create(ctx context.Context, req *fuse.CreateRequest, res *fuse.CreateResponse) (fs.Node, fs.Handle, error) {
+func (n *FuseFSNode) Create(ctx context.Context, req *fuse.CreateRequest, res *fuse.CreateResponse) (fs.Node, fs.Handle, error) {
 	if !n.Mode.IsDir() {
 		return nil, nil, syscall.ENOTDIR
 	}
@@ -154,7 +154,7 @@ func (n *fuseFSNode) Create(ctx context.Context, req *fuse.CreateRequest, res *f
 }
 
 // fs.NodeMkdirer
-func (n *fuseFSNode) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fs.Node, error) {
+func (n *FuseFSNode) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fs.Node, error) {
 	if !n.Mode.IsDir() {
 		return nil, syscall.ENOTDIR
 	}
@@ -189,7 +189,7 @@ func (n *fuseFSNode) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fs.Node
 }
 
 // fs.NodeGetxattrer
-func (n fuseFSNode) Getxattr(ctx context.Context, req *fuse.GetxattrRequest, res *fuse.GetxattrResponse) error {
+func (n FuseFSNode) Getxattr(ctx context.Context, req *fuse.GetxattrRequest, res *fuse.GetxattrResponse) error {
 	// NOTE: req.Size is the size of res.Xattr. Size check is performed by fuse library
 
 	if n.Xattrs == nil {
@@ -206,8 +206,9 @@ func (n fuseFSNode) Getxattr(ctx context.Context, req *fuse.GetxattrRequest, res
 }
 
 // fs.HandleReadDirAller
-func (n *fuseFSNode) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
+func (n *FuseFSNode) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 	ents := make([]fuse.Dirent, len(n.Nodes))
+
 	for i, node := range n.Nodes {
 		typ := fuse.DT_File
 		if node.Mode.IsDir() {
@@ -215,10 +216,11 @@ func (n *fuseFSNode) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 		}
 		ents[i] = fuse.Dirent{Inode: node.Inode, Type: typ, Name: node.Name}
 	}
+
 	return ents, nil
 }
 
-func (n *fuseFSNode) Read(ctx context.Context, req *fuse.ReadRequest, resp *fuse.ReadResponse) error {
+func (n *FuseFSNode) Read(ctx context.Context, req *fuse.ReadRequest, resp *fuse.ReadResponse) error {
 	filename := n.Path + "/" + n.Name
 
 	if uint64(len(n.Data)) >= n.Size {
@@ -259,7 +261,7 @@ func (n *fuseFSNode) Read(ctx context.Context, req *fuse.ReadRequest, resp *fuse
 	return nil
 }
 
-func (n *fuseFSNode) Write(ctx context.Context, req *fuse.WriteRequest, res *fuse.WriteResponse) error {
+func (n *FuseFSNode) Write(ctx context.Context, req *fuse.WriteRequest, res *fuse.WriteResponse) error {
 	if req.FileFlags.IsReadOnly() {
 		return syscall.EBADF
 	}
@@ -274,8 +276,8 @@ func (n *fuseFSNode) Write(ctx context.Context, req *fuse.WriteRequest, res *fus
 	return nil
 }
 
-func (n *fuseFSNode) getNode(name string, mode os.FileMode) *fuseFSNode {
-	return &fuseFSNode{
+func (n *FuseFSNode) getNode(name string, mode os.FileMode) *FuseFSNode {
+	return &FuseFSNode{
 		FS:    n.FS,
 		Name:  name,
 		Path:  n.Path,
@@ -284,7 +286,7 @@ func (n *fuseFSNode) getNode(name string, mode os.FileMode) *fuseFSNode {
 	}
 }
 
-func (n *fuseFSNode) getNodeDir() string {
+func (n *FuseFSNode) getNodeDir() string {
 	return n.FS.Mountpoint() + "/" + n.Path
 }
 
