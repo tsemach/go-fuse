@@ -4,9 +4,9 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "Unmount",
+      "label": "Unmount-1",
       "type": "shell",
-      "command": "sudo umount /tmp/fusefs",
+      "command": "sudo umount /tmp/fusefs-1",
       "problemMatcher": [],
       "group": {
           "kind": "build",
@@ -20,6 +20,28 @@
           "showReuseMessage": true,
           "clear": false
       }
+    },    
+    {
+      "label": "Unmount-2",
+      "type": "shell",
+      "command": "sudo umount /tmp/fusefs-2",
+      "problemMatcher": [],
+      "group": {
+          "kind": "build",
+          "isDefault": true
+      },
+      "presentation": {
+          "echo": true,
+          "reveal": "always",
+          "focus": false,
+          "panel": "shared",
+          "showReuseMessage": true,
+          "clear": false
+      },      
+    },
+    {
+      "label": "Unmount",
+      "dependsOn": ["Unmount-1", "Unmount-2"]
     }
   ]
 }
