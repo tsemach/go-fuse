@@ -31,6 +31,7 @@ func NewFuseFS(mountpoint string, targetpath string) (FuseFS, error) {
 	rfs.rootNode = &FuseFSNode{
 		FS:    rfs,
 		Inode: 1,
+		Path: targetpath,
 		Mode:  os.ModeDir | 0o555,
 	}
 
