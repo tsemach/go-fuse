@@ -60,7 +60,7 @@ type FuseFSNode struct {
 
 // fs.Node */
 func (n FuseFSNode) Attr(ctx context.Context, attr *fuse.Attr) error {
-	attr.Inode = n.Inode
+		attr.Inode = n.Inode
 	attr.Mode = n.Mode
 	attr.Size = uint64(n.Size)
 
@@ -101,6 +101,10 @@ func (n *FuseFSNode) Remove(ctx context.Context, req *fuse.RemoveRequest) error 
 				}
 			}
 
+			err := os.Remove(getPath(n.Path, req.Name)) 
+			if err != nil { 
+				log.Fatal("ERROR: [Remove] err removing:", getPath(n.Path, n.Name)) 
+			} 
 			n.Nodes = append(n.Nodes[:i], n.Nodes[i+1:]...)
 			return nil
 		}
