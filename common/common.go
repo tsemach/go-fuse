@@ -3,10 +3,12 @@ package common
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
-	"os"
+	"os"	
+	"strings"
 )
 
 func GetEnv(key, fallback string) string {
@@ -51,4 +53,26 @@ func MakeResponse(name string, route string) []byte {
 
 func First[T, U any](val T, _ U) T {
 	return val
+}
+
+func first[T, U any](val T, _ U) T {
+	return val
+}
+
+func Exists(name string) (bool, error) {	
+	_, err := os.Stat(name)
+	if err == nil {
+		return true, nil
+	}
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	return false, err
+}
+
+func GetRootDir() string{
+	current := First(os.Getwd())
+	arr := strings.Split(current, "/")
+
+	return strings.Join(arr[:len(arr)-1], "/")	
 }

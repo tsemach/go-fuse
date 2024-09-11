@@ -1,0 +1,7 @@
+local: true
+stam: aaaaaaaaaaaaaaaaaaaaaa
+filesystems:
+  - mountpoint: /tmp/fusefs-1
+    targetpath: /home/tsemach/tmp/fusefs-1
+  - mountpoint: /tmp/fusefs-2
+    targetpath: /home/tsemach/tmp/fusefs-2

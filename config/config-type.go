@@ -2,11 +2,12 @@
 package config
 
 type FuseFSMountPoint struct {
-	Mountpoint string
-	Targetpath string
+	Mountpoint string `yaml:"mountpoint"`
+	Targetpath string `yaml:"targetpath"`
 }
 
 type Config struct {
 	Local bool `envconfig:"FUSEFS_LOCAL",yaml:"local"`
-	Filesystems []FuseFSMountPoint 
+	Filesystems []FuseFSMountPoint `yaml:"filesystems"`
+	Stam string `yaml:"stam"`
 }

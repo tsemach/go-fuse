@@ -7,27 +7,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/tsemach/go-fuse/common"
+	"github.com/tsemach/go-fuse/config"
+	"github.com/tsemach/go-fuse/fusefs"
 	"github.com/tsemach/go-fuse/server"
-	// "gitlab.mobileye.com/iot/iot-upload-go/config"
-	// cfg "gitlab.mobileye.com/iot/iot-upload-go/config"
 )
 
 var port = 8080
-
-// func main_init() {
-// 	var wg sync.WaitGroup
-
-// 	config.BuildConfig()
-// 	wg.Add(1)
-// 	go iotaws.AWS.Init(&wg)
-// 	wg.Add(1)
-// 	go ops.OS.Connect(&wg)
-// 	wg.Add(1)
-// 	go redis.Redis.Connect(&wg)
-// 	wg.Add(1)
-// 	go upload.Upload.Init(&wg)
-// 	wg.Wait()
-// }
 
 func createServer() *http.Server {
 	r := server.CreateGin()
@@ -42,8 +28,13 @@ func createServer() *http.Server {
 }
 
 func main() {
-	// main_init()
-	// config.BuildConfig()
+	config.BuildConfig(common.First(config.GetConfigPath("fusefs.yaml")))
+	for i := 0; i < len(config.GetConfig().Filesystems); i++ {
+		mountpoint := config.GetConfig().Filesystems[i].Mountpoint
+		targetpath := config.GetConfig().Filesystems[i].Targetpath
+
+		go fusefs.CreateFuseFSWatchDog(mountpoint, targetpath)
+	}
 
 	mydir, err := os.Getwd()
 	if err != nil {

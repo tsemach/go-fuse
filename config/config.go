@@ -25,7 +25,7 @@ func first[T, U any](val T, _ U) T {
 	return val
 }
 
-func exists(name string) (bool, error) {
+func exists(name string) (bool, error) {	
 	_, err := os.Stat(name)
 	if err == nil {
 		return true, nil
@@ -36,14 +36,14 @@ func exists(name string) (bool, error) {
 	return false, err
 }
 
-func getConfigPath() (string, bool) {
+func GetConfigPath(filepath string) (string, bool) {
 	var config string
 
-	if first(exists("fusefs.yaml")) {
-		return "fusefs.yaml", true
+	if first(exists(filepath)) {
+		return filepath, true
 	}
 
-	config = os.Getenv("IOT-UPLOAD-CONFIG")
+	config = os.Getenv("FUSEFS-CONFIG")
 	if config != "" {
 		return config, true
 	}
@@ -51,8 +51,8 @@ func getConfigPath() (string, bool) {
 	return "", false
 }
 
-func readFile(cfg *Config) bool {
-	cfgPath, isExist := getConfigPath()
+func readFile(cfg *Config, filename string) bool {
+	cfgPath, isExist := GetConfigPath(filename)
 
 	if !isExist {
 		return false
@@ -81,9 +81,9 @@ func readEnv(cfg *Config) {
 	}
 }
 
-func BuildConfig() {
+func BuildConfig(filename string) {
 
-	if !readFile(&cfg) {
+	if !readFile(&cfg, filename) {
 		fmt.Println("config: config file os not found, using just environment variables")
 	}
 	readEnv(&cfg)
